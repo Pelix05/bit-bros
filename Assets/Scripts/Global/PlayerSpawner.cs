@@ -1,5 +1,7 @@
+using System.Reflection;
 using UnityEngine;
 using Cinemachine;
+using UnityEngine.SceneManagement;
 
 public class PlayerSpawner : MonoBehaviour
 {
@@ -23,9 +25,20 @@ public class PlayerSpawner : MonoBehaviour
         {
             CharacterController cc = player.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = false;
-            
-            playerControl.transform.position = spawnPoint.position;
-            player.transform.position = spawnPoint.position;
+            // Set container position/rotation
+            playerControl.transform.SetPositionAndRotation(spawnPoint.position, spawnPoint.rotation);
+
+            // Prefer using PlayerMoveController to set player position+rotation safely
+            var moveCtrl = player.GetComponent<PlayerMoveController>();
+            if (moveCtrl != null)
+            {
+                moveCtrl.SetPositionAndRotation(spawnPoint);
+                Debug.Log("PlayerMoveController.SetPositionAndRotation called for spawn");
+            }
+            else
+            {
+                player.transform.SetPositionAndRotation(spawnPoint.position, spawnPoint.rotation);
+            }
 
             // Pastikan tag Player ada supaya script lain dapat menemukan Player dengan tag
             try
@@ -100,6 +113,55 @@ public class PlayerSpawner : MonoBehaviour
                     vcam.LookAt = null;
                     vcam.Priority = 1000; // naikan priority supaya jadi active
                     Debug.Log($"CinemachineVirtualCamera Follow set to preferredTarget ({preferredTarget.name}), LookAt cleared (priority raised)");
+                    // Try to set transposer binding mode to WorldSpace so the camera offset doesn't rotate with the player
+                    try
+                    {
+                        var transposer = vcam.GetCinemachineComponent<CinemachineTransposer>();
+                        if (transposer != null)
+                        {
+                            var field = transposer.GetType().GetField("m_BindingMode", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                            if (field != null)
+                            {
+                                var enumType = field.FieldType;
+                                string[] tryNames = new[] { "WorldSpace", "SimpleFollowWithWorldUp", "LockToTargetWithWorldUp" };
+                                foreach (var name in tryNames)
+                                {
+                                    try
+                                    {
+                                        var parsed = System.Enum.Parse(enumType, name);
+                                        field.SetValue(transposer, parsed);
+                                        Debug.Log("Set CinemachineTransposer.m_BindingMode to " + name);
+                                        break;
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning("Failed to set transposer binding mode: " + e.Message);
+                    }
+
+                    // Adjust sensitivity and view distance per-scene so Imagination can feel different
+                            if (view != null)
+                            {
+                                // Apply per-scene camera settings: Imagination uses lower sensitivity and closer camera.
+                                string sceneName = SceneManager.GetActiveScene().name;
+                                if (sceneName == "Imagination")
+                                {
+                                    view.SetSensitivity(0.9f, 0.55f);
+                                    view.SetViewDistance(1.8f);
+                                    Debug.Log("Applied Imagination camera settings: sensitivity(0.9,0.55), viewDistance=1.8");
+                                }
+                                else
+                                {
+                                    // Reduce default sensitivity for other scenes (e.g., scene 1) to avoid feeling too twitchy
+                                    view.SetSensitivity(1.0f, 0.6f);
+                                    view.SetViewDistance(3.2f);
+                                    Debug.Log("Applied default camera settings: sensitivity(1.0,0.6), viewDistance=3.2");
+                                }
+                            }
                     // Log detail ViewController targets if ada
                     var viewComp = playerControl.GetComponent<ViewController>();
                     if (viewComp != null)

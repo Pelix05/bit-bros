@@ -19,15 +19,15 @@ public class ViewController : MonoBehaviour
     private bool loggedViewControlDisabled = false;
 
     [SerializeField]
-    private float sensitivityMouseX = 2.5f;// 鼠标旋转X轴灵敏度
+    private float sensitivityMouseX = 1.5f; // 鼠标旋转X轴灵敏度 (调低)
     [SerializeField]
-    private float sensitivityMouseY = 1f;// 鼠标旋转Y轴灵敏度
+    private float sensitivityMouseY = 0.9f; // 鼠标旋转Y轴灵敏度 (调低)
 
     [SerializeField]
-    private float viewDistance = 4.0f;// 摄像机与玩家的距离
-    private float viewDistanceMin = 2.0f;// 摄像机离玩家的最小距离
-    private float viewDistanceMax = 6.0f;// 摄像机离玩家的最大距离
-    private float viewLerpSpeed = 0.02f;// 摄相机平滑过渡速度
+    private float viewDistance = 3.0f; // 摄像机与玩家的距离 (默认更近)
+    private float viewDistanceMin = 1.5f; // 摄像机离玩家的最小距离
+    private float viewDistanceMax = 4.0f; // 摄像机离玩家的最大距离
+    private float viewLerpSpeed = 0.06f; // 摄相机平滑过渡速度 (稍快一点)
 
     private Vector3[] viewBlockPoint;// 摄像机中间点及近面四个角的偏移, 用于射线检测
 
@@ -76,21 +76,39 @@ public class ViewController : MonoBehaviour
     }
 
     /// <summary>
+    /// Set mouse sensitivity at runtime
+    /// </summary>
+    public void SetSensitivity(float x, float y)
+    {
+        sensitivityMouseX = x;
+        sensitivityMouseY = y;
+    }
+
+    /// <summary>
+    /// Set desired camera distance at runtime
+    /// </summary>
+    public void SetViewDistance(float d)
+    {
+        viewDistance = Mathf.Clamp(d, viewDistanceMin, viewDistanceMax);
+    }
+
+    /// <summary>
     /// 角色视角控制, 包括鼠标控制及被遮挡后的自动缩进
     /// </summary>
     private void ViewControl()
     {
         if (viewControllable)
         {
-            // 角度旋转
-            lookRotationEuler.x += Input.GetAxis("Mouse Y") * sensitivityMouseY * -1;
-            lookRotationEuler.y += Input.GetAxis("Mouse X") * sensitivityMouseX;
+            // 角度旋转 - 带时间缩放和平滑以防抖动
+            float mx = Input.GetAxis("Mouse X") * sensitivityMouseX * 100f * Time.deltaTime;
+            float my = Input.GetAxis("Mouse Y") * sensitivityMouseY * 100f * Time.deltaTime;
 
-            // 越界限制
-            lookRotationEuler.x = Mathf.Clamp(lookRotationEuler.x, -60, 80);
+            lookRotationEuler.x = Mathf.Clamp(lookRotationEuler.x + my * -1f, -60f, 80f);
+            lookRotationEuler.y += mx;
 
-            // 视角赋值
-            followingCameraParent.rotation = Quaternion.Euler(lookRotationEuler);
+            // 平滑旋转到目标角度
+            Quaternion targetRot = Quaternion.Euler(lookRotationEuler);
+            followingCameraParent.rotation = Quaternion.Slerp(followingCameraParent.rotation, targetRot, 10f * Time.deltaTime);
         }
         else
         {
