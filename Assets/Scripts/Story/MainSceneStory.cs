@@ -202,59 +202,6 @@ public class MainSceneStory : MonoBehaviour
 
 
 
-<<<<<<< Updated upstream
-                GameEventManager.Instance.dialogConfigEndEvent.AddListener(storyListener.StoryProcess4_0);
-                break;
-            case 5:// 报告
-                GameUIManager.Instance.mainTaskTip.UpdateTask("报告艾克特村长", "强盗即将来袭。");
-
-                ectorNPC.AddSpecialDialog(dialog_5_0);
-                PlayerInputManager.Instance.moveController.SetPositionAndRotation(beforeReportPosition);
-                GameUIManager.Instance.destinationMark.SetTarget(mark_ector);
-
-                GameEventManager.Instance.dialogConfigEndEvent.AddListener(storyListener.StoryProcess5_0);
-                break;
-            case 6:// 入侵
-                GameUIManager.Instance.mainTaskTip.UpdateTask("抵御入侵者", "似乎有敌人袭击村庄，前往村庄入口帮助击退来犯的敌人。");
-
-                villageFire.SetActive(true);
-                villageNPCs.SetActive(false);
-                beforeInvasionVillagerNPC.gameObject.SetActive(true);
-                GameUIManager.Instance.destinationMark.SetTarget(mark_invasion, 25.0f);
-                villagerNonCombat.GetComponent<NonCombatField>().PlayerTirggerExit();
-                villagerNonCombat.SetActive(false);
-
-                GameEventManager.Instance.characterBeforeDeathEvent.AddListener(storyListener.StoryProcess6_0);
-                break;
-            case 7:// 出售
-                for (int i = 0; i < submitWeaponCount; i++)
-                {
-                    invasionVillagers[i].gameObject.SetActive(false);
-                }
-
-                GameUIManager.Instance.mainTaskTip.UpdateTask("打扫战场", "拾取敌人掉落的武器和药品，使用药品恢复血量，到铁匠那里出售至少一件物品。");
-
-                //invasionSupport.SetActive(false);
-                invasionDrops.SetActive(true);
-                GameUIManager.Instance.destinationMark.SetTarget(mark_invasionDrops, 8.0f);
-
-                if (autoPickupStoryDialog) GameEventManager.Instance.pickUpItemEvent.AddListener(storyListener.StoryProcess7_0);
-                break;
-            case 8:// 告别
-                GameUIManager.Instance.mainTaskTip.UpdateTask("找到艾克特", "与艾克特告别。");
-
-                ectorNPC.AddSpecialDialog(dialog_8_0);
-                GameUIManager.Instance.destinationMark.SetTarget(mark_ector);
-
-                GameEventManager.Instance.dialogConfigEndEvent.AddListener(storyListener.StoryProcess8_0);
-                break;
-            case 9:// 离开
-                GameUIManager.Instance.mainTaskTip.UpdateTask("离开村庄", "找到巨石后的隐蔽小路的入口，离开村庄。");
-                GameUIManager.Instance.destinationMark.SetTarget(mark_villagePath);
-                cemeteryNPCs.SetActive(true);
-                levelEnd.SetActive(true);
-=======
->>>>>>> Stashed changes
 
                 break;
 
