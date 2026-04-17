@@ -38,6 +38,13 @@ public class InteractDetect : MonoBehaviour
 
     private void Update()
     {
+        // Reacquire UI references if scene UI was recreated (persistent player keeps this component)
+        if ((interactLabel == null || interactTextLabel == null) && GameUIManager.Instance != null)
+        {
+            interactLabel = GameUIManager.Instance.interact;
+            interactTextLabel = GameUIManager.Instance.interactTextLabel;
+        }
+
         if (interactable)
         {
             // 检测可交互物体
@@ -91,7 +98,7 @@ public class InteractDetect : MonoBehaviour
         interactable = enable;
         if (!enable)
         {
-            interactLabel.SetActive(false);
+            if (interactLabel != null) interactLabel.SetActive(false);
         }
     }
 

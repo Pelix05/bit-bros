@@ -304,7 +304,7 @@ ParticleSystem:
       serializedVersion: 2
       minMaxState: 0
       minColor: {r: 1, g: 1, b: 1, a: 1}
-      maxColor: {r: 0.30538002, g: 0.17577073, b: 0.4415095, a: 1}
+      maxColor: {r: 0.30683216, g: 0.061167672, b: 0.4566037, a: 1}
       maxGradient:
         serializedVersion: 2
         key0: {r: 1, g: 1, b: 1, a: 1}
@@ -753,7 +753,7 @@ ParticleSystem:
     donutRadius: 0.2
     m_Position: {x: 0, y: -0.5, z: 0}
     m_Rotation: {x: 270, y: 0, z: 0}
-    m_Scale: {x: 2, y: 2, z: 1.5}
+    m_Scale: {x: 2, y: 2, z: 1.1}
     placementMode: 0
     m_MeshMaterialIndex: 0
     m_MeshNormalOffset: 0
@@ -951,7 +951,7 @@ ParticleSystem:
     rateOverTime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 10
+      scalar: 40
       minScalar: 10
       maxCurve:
         serializedVersion: 2
@@ -4930,3 +4930,4 @@ MonoBehaviour:
   teleportEffect: {fileID: 0}
   teleportDelay: 0.2
   oneTimeUse: 1
+  useAsyncLoader: 1

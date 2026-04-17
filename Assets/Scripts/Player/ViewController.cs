@@ -41,7 +41,8 @@ public class ViewController : MonoBehaviour
 
     private void LateUpdate()
     {
-        followingCameraParent.position = playerViewPoint.position;
+        if (followingCameraParent != null && playerViewPoint != null)
+            followingCameraParent.position = playerViewPoint.position;
         ViewControl();
     }
 
@@ -49,12 +50,17 @@ public class ViewController : MonoBehaviour
     private void Init()
     {
         mainCamera = Camera.main;
-        playerVCamera = followingCameraParent.GetChild(0);
+        if (followingCameraParent != null && followingCameraParent.childCount > 0)
+            playerVCamera = followingCameraParent.GetChild(0);
+        else
+            playerVCamera = null;
 
         // 初始化相机近面的点偏移, 用于射线检测
-        float halfFOV = (mainCamera.fieldOfView * 0.5f) * Mathf.Deg2Rad;
-        float halfHeight = mainCamera.nearClipPlane * Mathf.Tan(halfFOV);
-        float halfWidth = halfHeight * mainCamera.aspect;
+        float fov = (mainCamera != null) ? mainCamera.fieldOfView : 60f;
+        float halfFOV = (fov * 0.5f) * Mathf.Deg2Rad;
+        float nearPlane = (mainCamera != null) ? mainCamera.nearClipPlane : 0.01f;
+        float halfHeight = nearPlane * Mathf.Tan(halfFOV);
+        float halfWidth = halfHeight * ((mainCamera != null) ? mainCamera.aspect : (16f / 9f));
         viewBlockPoint = new Vector3[5];
         viewBlockPoint[0] = new Vector3(0, 0, 0);
         viewBlockPoint[1] = new Vector3(-halfWidth, -halfHeight, 0);
@@ -71,7 +77,8 @@ public class ViewController : MonoBehaviour
     public void InitCamera()
     {
         followingCameraParent.SetPositionAndRotation(playerViewPoint.position, playerViewPoint.rotation);
-        playerVCamera.SetPositionAndRotation(playerViewPoint.position - playerVCamera.forward * viewDistance, playerViewPoint.rotation);
+        // Use followingCameraParent.forward so initial placement follows the intended parent rotation
+        playerVCamera.SetPositionAndRotation(playerViewPoint.position - followingCameraParent.forward * viewDistance, playerViewPoint.rotation);
         lookRotationEuler = playerViewPoint.eulerAngles;
     }
 
@@ -97,6 +104,9 @@ public class ViewController : MonoBehaviour
     /// </summary>
     private void ViewControl()
     {
+        if (followingCameraParent == null || playerVCamera == null || playerViewPoint == null)
+            return;
+
         if (viewControllable)
         {
             // 角度旋转 - 带时间缩放和平滑以防抖动
@@ -109,6 +119,9 @@ public class ViewController : MonoBehaviour
             // 平滑旋转到目标角度
             Quaternion targetRot = Quaternion.Euler(lookRotationEuler);
             followingCameraParent.rotation = Quaternion.Slerp(followingCameraParent.rotation, targetRot, 10f * Time.deltaTime);
+
+            // Keep the virtual camera rotation in sync with the following parent (smooth)
+            playerVCamera.rotation = Quaternion.Slerp(playerVCamera.rotation, followingCameraParent.rotation, 10f * Time.deltaTime);
         }
         else
         {
@@ -130,14 +143,16 @@ public class ViewController : MonoBehaviour
                 // Debug.Log($"Mouse axes while view disabled: MouseX={Input.GetAxisRaw("Mouse X")}, MouseY={Input.GetAxisRaw("Mouse Y")}");
             }
         }
-        playerVCamera.position = Vector3.Lerp(playerVCamera.position, followingCameraParent.position - playerVCamera.forward * viewDistance, viewLerpSpeed);
+        // Move camera smoothly keeping it behind the following parent (use parent's forward)
+        playerVCamera.position = Vector3.Lerp(playerVCamera.position, followingCameraParent.position - followingCameraParent.forward * viewDistance, viewLerpSpeed);
 
         // 射线检测, 判断视线是否被遮挡
         float minDis = viewDistanceMax + 1;
         for (int i = 0; i < 5; i++)
         {
             // 射线检测到到目标, 且为环境
-            if (Physics.Linecast(followingCameraParent.position + playerVCamera.TransformDirection(viewBlockPoint[i]), playerVCamera.position + playerVCamera.TransformDirection(viewBlockPoint[i]),
+            // Use followingCameraParent.TransformDirection so both sample points use consistent rotation
+            if (Physics.Linecast(followingCameraParent.position + followingCameraParent.TransformDirection(viewBlockPoint[i]), playerVCamera.position + followingCameraParent.TransformDirection(viewBlockPoint[i]),
                     out RaycastHit hit, ~(1 << 2 | 1 << 7)))
             {
                 float dis = Vector3.Distance(followingCameraParent.position, hit.point);
@@ -147,7 +162,7 @@ public class ViewController : MonoBehaviour
         // 判断视线是否被遮挡并更新相机位置
         if (minDis < viewDistanceMax)
         {
-            playerVCamera.position = followingCameraParent.position - playerVCamera.forward * minDis;
+            playerVCamera.position = followingCameraParent.position - followingCameraParent.forward * minDis;
         }
     }
 }

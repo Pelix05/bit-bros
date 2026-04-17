@@ -212,7 +212,8 @@ public class SceneLoader : MonoBehaviour
                 if (sceneName == "Imagination")
                 {
                     view.SetSensitivity(0.9f, 0.55f);
-                    view.SetViewDistance(1.8f);
+                    // Slightly increase camera distance for Imagination (scene 2)
+                    view.SetViewDistance(2.2f);
                 }
                 else
                 {
@@ -275,6 +276,17 @@ public class SceneLoader : MonoBehaviour
                     }
                 }
                 catch { }
+
+                // Add CinemachineCollider if available to help avoid camera clipping
+                try
+                {
+                    var existing = vcam.GetComponent<Cinemachine.CinemachineCollider>();
+                    if (existing == null)
+                    {
+                        vcam.gameObject.AddComponent<Cinemachine.CinemachineCollider>();
+                    }
+                }
+                catch { }
             }
             catch { }
         }
@@ -297,7 +309,30 @@ public class SceneLoader : MonoBehaviour
                 if (PlayerInputManager.Instance.combatController != null)
                 {
                     try { PlayerInputManager.Instance.combatController.InitCombat(); } catch { }
-                    try { PlayerInputManager.Instance.combatController.SwitchWeapon(PlayerInputManager.Instance.combatController.equipedWeaponID); } catch { }
+
+                    // Prefer applying the equipped weapon based on Inventory or persisted save data
+                    int weaponToApply = -1;
+                    try
+                    {
+                        if (InventoryManager.Instance != null && InventoryManager.Instance.WeaponID > 0)
+                        {
+                            weaponToApply = InventoryManager.Instance.WeaponID;
+                        }
+                        else if (DataManager.Instance != null && DataManager.Instance.saveData != null && DataManager.Instance.saveData.inventorySaveData != null && DataManager.Instance.saveData.inventorySaveData.weaponID > 0)
+                        {
+                            weaponToApply = DataManager.Instance.saveData.inventorySaveData.weaponID;
+                        }
+                        else
+                        {
+                            weaponToApply = PlayerInputManager.Instance.combatController.equipedWeaponID;
+                        }
+                    }
+                    catch { weaponToApply = PlayerInputManager.Instance.combatController.equipedWeaponID; }
+
+                    if (weaponToApply > 0)
+                    {
+                        try { PlayerInputManager.Instance.combatController.SwitchWeapon(weaponToApply); } catch { }
+                    }
                     try { PlayerInputManager.Instance.combatController.SetWeaponVisible(true); } catch { }
                 }
             }

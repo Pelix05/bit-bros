@@ -25,12 +25,13 @@ public class PlayerCombatController : MonoBehaviour
     private float hitPauseTimer;// 击打顿帧计时器
     [HideInInspector]
     public int equipedWeaponID;// 装备中的武器
+    private GameObject runtimeWeaponInstance; // instantiated at runtime if inspector models are missing
 
     public bool playerSkillControllable = true;// 是否能够使用技能
 
     private static bool firstLoad = true;
 
-    public bool WeaponVisible { get { return weaponParent.activeSelf; } }
+    public bool WeaponVisible { get { return weaponParent != null && weaponParent.activeSelf; } }
 
 
     private void Awake()
@@ -63,6 +64,7 @@ public class PlayerCombatController : MonoBehaviour
             if (weaponParent != null)
                 weaponParent.SetActive(anyActive);
         }
+        Debug.Log($"PlayerCombatController Awake: equipedWeaponID={equipedWeaponID}, weaponParent={(weaponParent!=null)}, weaponModelsCount={(weaponModels!=null?weaponModels.Count:0)}");
     }
 
     private void Update()
@@ -75,6 +77,8 @@ public class PlayerCombatController : MonoBehaviour
     {
         if (GameEventManager.Instance != null)
             GameEventManager.Instance.pickUpItemEvent.AddListener(OnPickUpItem);
+        // Attempt to reapply equipped weapon when component becomes enabled (useful after scene load)
+        try { ReapplyEquippedWeaponFromSave(); } catch { }
     }
 
     private void OnDisable()
@@ -99,6 +103,38 @@ public class PlayerCombatController : MonoBehaviour
     private void OnDestroy()
     {
         firstLoad = false;
+    }
+
+    private void Start()
+    {
+        // Ensure weapon visuals are present on Start as well
+        try { ReapplyEquippedWeaponFromSave(); } catch { }
+    }
+
+    /// <summary>
+    /// Reapply equipped weapon from Inventory/DataManager/save or current equipedWeaponID.
+    /// Called on Start/OnEnable to ensure weapon model is present after scene transitions.
+    /// </summary>
+    private void ReapplyEquippedWeaponFromSave()
+    {
+        int weaponToApply = -1;
+        try
+        {
+            if (InventoryManager.Instance != null && InventoryManager.Instance.WeaponID > 0)
+                weaponToApply = InventoryManager.Instance.WeaponID;
+            else if (DataManager.Instance != null && DataManager.Instance.saveData != null && DataManager.Instance.saveData.inventorySaveData != null && DataManager.Instance.saveData.inventorySaveData.weaponID > 0)
+                weaponToApply = DataManager.Instance.saveData.inventorySaveData.weaponID;
+            else if (equipedWeaponID > 0)
+                weaponToApply = equipedWeaponID;
+        }
+        catch { }
+
+        if (weaponToApply > 0)
+        {
+            Debug.Log($"Reapplying equipped weapon from save: {weaponToApply}");
+            SwitchWeapon(weaponToApply);
+            SetWeaponVisible(true);
+        }
     }
 
     /// <summary>
@@ -176,12 +212,165 @@ public class PlayerCombatController : MonoBehaviour
     /// </summary>
     public void SwitchWeapon(int id)
     {
-        foreach (PlayerEquipmentModel model in weaponModels)
+        // Ensure weaponParent reference exists (useful for persistent objects across scenes)
+        if (weaponParent == null)
+            FindWeaponParentIfNull();
+
+        bool foundStatic = false;
+        if (weaponModels != null)
         {
-            model.equipmentModel.SetActive(model.equipmentID == id);
+            foreach (PlayerEquipmentModel model in weaponModels)
+            {
+                if (model == null) continue;
+                if (model.equipmentModel == null) continue;
+                bool shouldActive = (model.equipmentID == id);
+                model.equipmentModel.SetActive(shouldActive);
+                if (shouldActive)
+                {
+                    foundStatic = true;
+                    // Put the active model on IgnoreRaycast layer so ViewController occlusion checks ignore it
+                    SetLayerRecursively(model.equipmentModel, 2);
+                    // Ensure the static model is parented under weaponParent so it follows player across scenes
+                    if (weaponParent != null && model.equipmentModel.transform.parent != weaponParent.transform)
+                    {
+                        model.equipmentModel.transform.SetParent(weaponParent.transform, false);
+                        model.equipmentModel.transform.localPosition = Vector3.zero;
+                        model.equipmentModel.transform.localRotation = Quaternion.identity;
+                        Debug.Log($"SwitchWeapon: reparented static model '{model.equipmentModel.name}' to '{weaponParent.name}'");
+                    }
+                    Debug.Log($"SwitchWeapon: activated static model '{model.equipmentModel.name}'");
+                    LogGameObjectInfo(model.equipmentModel);
+                    EnableRenderersRecursively(model.equipmentModel, true);
+                }
+            }
+        }
+
+        // destroy previous runtime instance if any
+        if (runtimeWeaponInstance != null)
+        {
+            Destroy(runtimeWeaponInstance);
+            runtimeWeaponInstance = null;
+        }
+
+        // If no static model found, try instantiate prefab from ItemConfig (robust across scenes)
+        if (!foundStatic && id > 0)
+        {
+            try
+            {
+                if (DataManager.Instance != null && DataManager.Instance.itemConfig != null)
+                {
+                    Item it = DataManager.Instance.itemConfig.FindItemByID(id);
+                    if (it != null && it.itemPrefab != null && weaponParent != null)
+                    {
+                        runtimeWeaponInstance = Instantiate(it.itemPrefab, weaponParent.transform);
+                        runtimeWeaponInstance.transform.localPosition = Vector3.zero;
+                        runtimeWeaponInstance.transform.localRotation = Quaternion.identity;
+                        runtimeWeaponInstance.transform.localScale = Vector3.one;
+                        // Ensure runtime-instantiated prefab doesn't block camera raycasts
+                        SetLayerRecursively(runtimeWeaponInstance, 2);
+                        Debug.Log($"SwitchWeapon: instantiated runtime weapon '{runtimeWeaponInstance.name}' under '{weaponParent.name}'");
+                        LogGameObjectInfo(runtimeWeaponInstance);
+                        EnableRenderersRecursively(runtimeWeaponInstance, true);
+                        foundStatic = true;
+                    }
+                }
+            }
+            catch { }
         }
 
         equipedWeaponID = id;
+        Debug.Log($"SwitchWeapon: equipped set to {id}, foundStatic={foundStatic}");
+
+        // Ensure weaponParent active state reflects whether we have a weapon model
+        if (weaponParent != null)
+        {
+            weaponParent.SetActive(foundStatic);
+            if (foundStatic)
+                SetLayerRecursively(weaponParent, 2);
+        }
+            // Additional diagnostic: list children under weaponParent
+            if (weaponParent != null)
+            {
+                Debug.Log($"WeaponParent '{weaponParent.name}' active={weaponParent.activeSelf}, children={weaponParent.transform.childCount}, worldPos={weaponParent.transform.position}");
+                for (int i = 0; i < weaponParent.transform.childCount; i++)
+                {
+                    var c = weaponParent.transform.GetChild(i).gameObject;
+                    Debug.Log($"  child[{i}]='{c.name}', active={c.activeSelf}, layer={c.layer}, scene='{c.scene.name}', root='{c.transform.root.name}'");
+                    LogGameObjectInfo(c);
+                }
+                if (Camera.main != null)
+                    Debug.Log($"MainCamera cullingMask for layer 2 (IgnoreRaycast) = {((Camera.main.cullingMask & (1<<2))!=0)} (mask={Camera.main.cullingMask})");
+            }
+    }
+
+    private void FindWeaponParentIfNull()
+    {
+        // Try common child names
+        var t = transform.Find("WeaponParent") ?? transform.Find("weaponParent") ?? transform.Find("Weapons") ?? transform.Find("WeaponHolder");
+        if (t != null)
+        {
+            weaponParent = t.gameObject;
+            return;
+        }
+
+        // Try to find any child with 'weapon' in name
+        foreach (Transform child in transform)
+        {
+            if (child.name.ToLower().Contains("weapon"))
+            {
+                weaponParent = child.gameObject;
+                return;
+            }
+        }
+
+        Debug.LogWarning("PlayerCombatController: weaponParent is null and couldn't be found automatically.");
+    }
+
+    private void SetLayerRecursively(GameObject go, int layer)
+    {
+        if (go == null) return;
+        go.layer = layer;
+        foreach (Transform child in go.transform)
+            SetLayerRecursively(child.gameObject, layer);
+    }
+
+    private void LogGameObjectInfo(GameObject go)
+    {
+        if (go == null)
+        {
+            Debug.Log("LogGameObjectInfo: null");
+            return;
+        }
+        string fullPath = go.name;
+        Transform p = go.transform.parent;
+        while (p != null)
+        {
+            fullPath = p.name + "/" + fullPath;
+            p = p.parent;
+        }
+
+        var meshes = go.GetComponentsInChildren<MeshRenderer>(true);
+        var skinned = go.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        int totalRenderers = meshes.Length + skinned.Length;
+        Debug.Log($"GameObjectInfo: '{go.name}' path='{fullPath}' active={go.activeInHierarchy} scene='{(go.scene.IsValid()?go.scene.name:"<no scene>")}' root='{go.transform.root.name}' worldPos={go.transform.position} localPos={go.transform.localPosition} scale={go.transform.lossyScale} renderers={totalRenderers}");
+
+        for (int i = 0; i < meshes.Length; i++)
+        {
+            Debug.Log($"  MeshRenderer[{i}] name={meshes[i].gameObject.name} enabled={meshes[i].enabled} bounds={meshes[i].bounds}");
+        }
+        for (int i = 0; i < skinned.Length; i++)
+        {
+            Debug.Log($"  SkinnedMeshRenderer[{i}] name={skinned[i].gameObject.name} enabled={skinned[i].enabled} bounds={skinned[i].bounds}");
+        }
+    }
+
+    private void EnableRenderersRecursively(GameObject go, bool enable)
+    {
+        if (go == null) return;
+        var meshes = go.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (var m in meshes) m.enabled = enable;
+        var skinned = go.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        foreach (var s in skinned) s.enabled = enable;
     }
 
     /// <summary>
@@ -241,7 +430,28 @@ public class PlayerCombatController : MonoBehaviour
 
     public void SetWeaponVisible(bool active)
     {
-        weaponParent.SetActive(active);
+        if (weaponParent == null)
+            FindWeaponParentIfNull();
+
+        if (weaponParent != null)
+        {
+            weaponParent.SetActive(active);
+            Debug.Log($"SetWeaponVisible: active={active}");
+            // Diagnostic: list children and renderer states
+            Debug.Log($"WeaponParent '{weaponParent.name}' active={weaponParent.activeSelf}, children={weaponParent.transform.childCount}, worldPos={weaponParent.transform.position}");
+            for (int i = 0; i < weaponParent.transform.childCount; i++)
+            {
+                var c = weaponParent.transform.GetChild(i).gameObject;
+                Debug.Log($"  child[{i}]='{c.name}', active={c.activeSelf}, layer={c.layer}, scene='{c.scene.name}', root='{c.transform.root.name}'");
+                LogGameObjectInfo(c);
+            }
+            if (Camera.main != null)
+                Debug.Log($"MainCamera cullingMask for layer 2 (IgnoreRaycast) = {((Camera.main.cullingMask & (1<<2))!=0)} (mask={Camera.main.cullingMask})");
+        }
+        else
+        {
+            Debug.LogWarning("SetWeaponVisible called but weaponParent is null");
+        }
     }
 }
 

@@ -17,7 +17,11 @@ public class FightAttributes : CharacterAttributes
 
     private void OnEnable()
     {
-        CombatCharacterManager.Instance.Register(this);
+        var ccm = CombatCharacterManager.Instance;
+        if (ccm != null)
+            ccm.Register(this);
+        else
+            Debug.LogWarning($"CombatCharacterManager not found when enabling {gameObject.name}");
     }
 
     private void OnDisable()

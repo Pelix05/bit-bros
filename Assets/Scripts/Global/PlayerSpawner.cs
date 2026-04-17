@@ -142,6 +142,17 @@ public class PlayerSpawner : MonoBehaviour
                     {
                         Debug.LogWarning("Failed to set transposer binding mode: " + e.Message);
                     }
+                    // Try to add CinemachineCollider to prevent camera clipping if package is available
+                    try
+                    {
+                        var existing = vcam.GetComponent<Cinemachine.CinemachineCollider>();
+                        if (existing == null)
+                        {
+                            vcam.gameObject.AddComponent<Cinemachine.CinemachineCollider>();
+                            Debug.Log("Added CinemachineCollider to vcam: " + vcam.gameObject.name);
+                        }
+                    }
+                    catch { }
 
                     // Adjust sensitivity and view distance per-scene so Imagination can feel different
                             if (view != null)
@@ -151,8 +162,9 @@ public class PlayerSpawner : MonoBehaviour
                                 if (sceneName == "Imagination")
                                 {
                                     view.SetSensitivity(0.9f, 0.55f);
-                                    view.SetViewDistance(1.8f);
-                                    Debug.Log("Applied Imagination camera settings: sensitivity(0.9,0.55), viewDistance=1.8");
+                                    // Slightly increase camera distance for scene 2 (Imagination)
+                                    view.SetViewDistance(3.5f);
+                                    Debug.Log($"Applied Imagination camera settings: sensitivity(0.9,0.55), viewDistance={2.2f}");
                                 }
                                 else
                                 {
